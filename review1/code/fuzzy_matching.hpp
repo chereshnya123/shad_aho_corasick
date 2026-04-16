@@ -322,9 +322,9 @@ private:
 template <class Predicate>
 std::vector<std::string> Split(const std::string& string,
                                Predicate is_delimeter) {
-    static const auto kMaxPatterns = 11U;
+    static const auto kMaxInputPatterns = 11U;
     std::vector<std::string> splitted;
-    splitted.reserve(kMaxPatterns);
+    splitted.reserve(kMaxInputPatterns);
 
     std::string pattern;
 
