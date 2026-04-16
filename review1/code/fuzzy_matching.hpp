@@ -329,12 +329,16 @@ std::vector<std::string> Split(const std::string& string,
     std::string pattern;
 
     for (const auto kChar : string) {
-        if (is_delimeter(kChar)) {
+        if (!is_delimeter(kChar)) {
+            pattern.push_back(kChar);
+            continue;
+        }
+
+        if (!pattern.empty()) {
             splitted.emplace_back(std::move(pattern));
             pattern.clear();
-        } else if (!is_delimeter(kChar)) {
-            pattern.push_back(kChar);
         }
+        splitted.emplace_back("");
     }
     splitted.emplace_back(std::move(pattern));
 
@@ -358,23 +362,18 @@ public:
         NAhoCorasick::AutomatonBuilder builder;
         auto words = Split(pattern, kIsWildcard);
         auto pattern_pos = 0U;
-        for (auto i = 0U; i < words.size(); ++i) {
-            if (!words[i].empty()) {
-                matcher.words_positions_.push_back(pattern_pos);
-                builder.Add(words[i], matcher.number_of_words_);
-                ++matcher.number_of_words_;
-            }
-            pattern_pos += words[i].size();
-            if (i + 1 < words.size()) {
-                while (pattern_pos < pattern.size() &&
-                       pattern[pattern_pos] == wildcard) {
-                    ++pattern_pos;
-                }
+        for (const auto& word : words) {
+            if (word.empty()) {
+                ++pattern_pos;
+                continue;
             }
 
-            if (!words[i].empty()) {
-                matcher.words_.push_back(std::move(words[i]));
-            }
+            matcher.words_positions_.push_back(pattern_pos);
+            pattern_pos += word.size();
+
+            builder.Add(word, matcher.number_of_words_);
+            ++matcher.number_of_words_;
+            matcher.words_.push_back(std::move(word));
         }
         matcher.aho_corasick_automaton_ = builder.Build();
         matcher.state_ = matcher.aho_corasick_automaton_->Root();
