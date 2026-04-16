@@ -1,5 +1,3 @@
-#pragma once
-
 #include <cassert>
 #include <cstring>
 #include <deque>
@@ -177,8 +175,7 @@ private:
 class TerminalLinkCalculator
     : public NTraverses::BfsVisitor<AutomatonNode*, AutomatonGraph::Edge> {
 public:
-    explicit TerminalLinkCalculator([[maybe_unused]] AutomatonNode* root)
-        : root_{nullptr} {}
+    explicit TerminalLinkCalculator(AutomatonNode* root) : root_(root) {}
 
     void DiscoverVertex(AutomatonNode* node) override {
         auto* border_node = node->suffix_link;
@@ -322,9 +319,9 @@ private:
 template <class Predicate>
 std::vector<std::string> Split(const std::string& string,
                                Predicate is_delimeter) {
-    static const auto kMaxInputPatterns = 11U;
+    static const auto kMaxPatterns = 11U;
     std::vector<std::string> splitted;
-    splitted.reserve(kMaxInputPatterns);
+    splitted.reserve(kMaxPatterns);
 
     std::string pattern;
 
@@ -365,8 +362,11 @@ public:
                 ++matcher.number_of_words_;
             }
             pattern_pos += words[i].size();
-            if (words.empty()) {
-                ++pattern_pos;
+            if (i + 1 < words.size()) {
+                while (pattern_pos < pattern.size() &&
+                       pattern[pattern_pos] == wildcard) {
+                    ++pattern_pos;
+                }
             }
 
             if (!words[i].empty()) {
