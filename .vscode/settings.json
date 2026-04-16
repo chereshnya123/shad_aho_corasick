@@ -1,0 +1,8 @@
+{
+  "clangd.path": "/usr/bin/clangd-18",
+  "C_Cpp.intelliSenseEngine": "Disabled",
+  "clangd.enabled": true,
+  "cSpell.words": [
+    "symb"
+  ],
+} 
