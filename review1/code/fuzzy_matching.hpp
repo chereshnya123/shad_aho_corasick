@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cassert>
 #include <cstring>
 #include <deque>
@@ -175,7 +177,8 @@ private:
 class TerminalLinkCalculator
     : public NTraverses::BfsVisitor<AutomatonNode*, AutomatonGraph::Edge> {
 public:
-    explicit TerminalLinkCalculator(AutomatonNode* root) : root_(root) {}
+    explicit TerminalLinkCalculator([[maybe_unused]] AutomatonNode* root)
+        : root_{nullptr} {}
 
     void DiscoverVertex(AutomatonNode* node) override {
         auto* border_node = node->suffix_link;
