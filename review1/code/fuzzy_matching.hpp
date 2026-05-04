@@ -263,6 +263,7 @@ private:
 
 class AutomatonBuilder {
 public:
+    // ID is index of original pattern, where word ends
     void Add(const std::string& word, size_t id) {
         words_.emplace_back(word);
         ids_.emplace_back(id);
@@ -368,12 +369,10 @@ public:
                 continue;
             }
 
-            matcher.words_positions_.push_back(pattern_pos);
             pattern_pos += word.size();
 
-            builder.Add(word, matcher.number_of_words_);
+            builder.Add(word, pattern_pos);
             ++matcher.number_of_words_;
-            matcher.words_.push_back(std::move(word));
         }
         matcher.aho_corasick_automaton_ = builder.Build();
         matcher.state_ = matcher.aho_corasick_automaton_->Root();
@@ -390,8 +389,9 @@ public:
     void Scan(char character, Callback on_match) {
         ShiftWordOccurrencesCounters();
         state_ = state_.Next(character);
-        state_.GenerateMatches(
-            [this](std::size_t id) { UpdateWordOccurrencesCounters(id); });
+        state_.GenerateMatches([this](std::size_t word_last_pos) {
+            UpdateWordOccurrencesCounters(word_last_pos);
+        });
 
         const auto kMatchedPatterns = words_occurrences_by_position_.front();
         const auto kWindowSize = words_occurrences_by_position_.size();
@@ -402,15 +402,13 @@ public:
     }
 
 private:
-    void UpdateWordOccurrencesCounters(std::size_t id) {
-        auto word_len = words_[id].size();
-        auto word_position = words_positions_[id];
+    void UpdateWordOccurrencesCounters(std::size_t word_last_pos) {
         // Check if out of bounds
-        if (word_position + word_len > words_occurrences_by_position_.size()) {
+        if (word_last_pos > words_occurrences_by_position_.size()) {
             return;
         }
         const auto kPatternOccur =
-            words_occurrences_by_position_.size() - word_position - word_len;
+            words_occurrences_by_position_.size() - word_last_pos;
         ++words_occurrences_by_position_[kPatternOccur];
     }
 
@@ -428,8 +426,6 @@ private:
     // As example, second word is started at `words_occurrences_by_position_[1]`
     // in original pattern
     std::deque<size_t> words_occurrences_by_position_;
-    std::vector<std::string> words_;
-    std::vector<std::size_t> words_positions_;
     NAhoCorasick::NodeReference state_;
     size_t number_of_words_;
     size_t pattern_length_;
