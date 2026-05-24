@@ -2,11 +2,25 @@
 #include <cassert>
 #include <iostream>
 #include <limits>
-#include <memory>
 #include <optional>
 #include <ranges>
-#include <utility>
 #include <vector>
+
+namespace Utils {
+template <typename Pred>
+int BinSearch(int left, int right, Pred pred) {
+    while (left < right) {
+        auto mid = (left + right) / 2;
+        if (pred(mid)) {
+            right = mid;
+        } else {
+            left = mid + 1;
+        }
+    }
+
+    return (left + right) / 2;
+}
+}  // namespace Utils
 
 struct TrustEdge {
     int tail;
@@ -220,25 +234,16 @@ std::tuple<Graph, int, int> ReadGraph() {
     return {graph, bars_sum, max_bars};
 }
 
-template <typename Pred>
-int CalculateLeastMaxLoad(int left, int right, Pred pred) {
-    while (left < right) {
-        auto mid = (left + right) / 2;
-        if (pred(mid)) {
-            right = mid;
-        } else {
-            left = mid + 1;
-        }
-    }
-
-    return (left + right) / 2;
-}
-
 int main() {
     std::ios::sync_with_stdio(false);
     std::cin.tie(nullptr);
     std::cout.tie(nullptr);
 
+    // Can not use structure binding because of clang-tidy False-Positive.
+    // Here's the text of such error
+    // error: 1st function call argument is an uninitialized value
+    // [clang-analyzer-core.CallAndMessage,-warnings-as-errors]
+    //            FlowNetwork flow_network{graph};
     auto read = ReadGraph();
     Graph& graph = std::get<0>(read);
     auto bars_sum = std::get<1>(read);
@@ -251,7 +256,7 @@ int main() {
         flow_network.SetTargetEdgesCap(minmax);
         return flow_network.GetMaxFlowVal() == bars_sum;
     };
-    auto minmax_bars = CalculateLeastMaxLoad(left, right, pred);
+    auto minmax_bars = Utils::BinSearch(left, right, pred);
 
     std::cout << minmax_bars << std::endl;
 }
