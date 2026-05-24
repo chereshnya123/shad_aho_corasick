@@ -2,8 +2,10 @@
 #include <cassert>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <ranges>
+#include <utility>
 #include <vector>
 
 struct TrustEdge {
@@ -31,9 +33,7 @@ public:
 
     void SetTrustEdge(int tail, int head) { edges_[tail].push_back(head); }
 
-    const std::vector<int>& GetTrustedNeighbors(int node) {
-        return edges_[node];
-    }
+    const std::vector<int>& GetNeighbors(int node) { return edges_[node]; }
 
 private:
     std::array<std::vector<int>, kMaxNodesCount> edges_{};
@@ -47,12 +47,11 @@ public:
     static constexpr auto kSourceIdx = 100;
     static constexpr auto kTargetIdx = 101;
 
-    FlowNetwork(Graph* graph) : size_{graph->GetSize()}, graph_{graph} {
-        auto size = graph->GetSize();
-        for (auto node = 0; node < size; ++node) {
-            auto bars_count = graph->GetNodeBars(node);
+    FlowNetwork(Graph& graph) : size_{graph.GetSize()}, graph_{graph} {
+        for (auto node = 0; node < size_; ++node) {
+            auto bars_count = graph.GetNodeBars(node);
             capacities_[kSourceIdx][node] = bars_count;
-            auto neighbors = graph->GetTrustedNeighbors(node);
+            auto neighbors = graph.GetNeighbors(node);
             if (neighbors.empty()) {
                 continue;
             }
@@ -89,9 +88,9 @@ public:
         }
     }
 
-    bool IsFlowMaximizible() {
+    int GetMaxFlowVal() {
         BuildMaxFlow();
-        return GetFlowVal() == graph_->GetBarsSum();
+        return GetFlowVal();
     }
 
     void SetTargetEdgesCap(int target_edges_cap) {
@@ -111,12 +110,12 @@ private:
             node_flow.fill(0);
         }
         for (int node_idx = 0; node_idx < size_; ++node_idx) {
-            flow_[kSourceIdx][node_idx] = graph_->GetNodeBars(node_idx);
-            flow_[node_idx][kSourceIdx] = -graph_->GetNodeBars(node_idx);
+            flow_[kSourceIdx][node_idx] = graph_.GetNodeBars(node_idx);
+            flow_[node_idx][kSourceIdx] = -graph_.GetNodeBars(node_idx);
         }
 
         for (auto node_idx = 0; node_idx < size_; ++node_idx) {
-            excesses_[node_idx] = graph_->GetNodeBars(node_idx);
+            excesses_[node_idx] = graph_.GetNodeBars(node_idx);
         }
         excesses_[kSourceIdx] = 0;
         excesses_[kTargetIdx] = 0;
@@ -184,7 +183,7 @@ private:
     }
 
     int size_;
-    Graph* graph_;
+    Graph& graph_;
     std::array<std::array<EdgeFlow, Graph::kMaxNodesCount + 2>,
                Graph::kMaxNodesCount + 2>
         flow_{};  // Matrix
@@ -221,11 +220,11 @@ std::tuple<Graph, int, int> ReadGraph() {
     return {graph, bars_sum, max_bars};
 }
 
-int CalculateLeastMaxLoad(FlowNetwork& flow_network, int left, int right) {
+template <typename Pred>
+int CalculateLeastMaxLoad(int left, int right, Pred pred) {
     while (left < right) {
         auto mid = (left + right) / 2;
-        flow_network.SetTargetEdgesCap(mid);
-        if (flow_network.IsFlowMaximizible()) {
+        if (pred(mid)) {
             right = mid;
         } else {
             left = mid + 1;
@@ -240,12 +239,19 @@ int main() {
     std::cin.tie(nullptr);
     std::cout.tie(nullptr);
 
-    auto [graph, bars_sum, max_bars] = ReadGraph();
+    auto read = ReadGraph();
+    Graph& graph = std::get<0>(read);
+    auto bars_sum = std::get<1>(read);
+    auto max_bars = std::get<2>(read);
     int left = bars_sum / graph.GetSize();
     int right = max_bars;
 
-    FlowNetwork flow_network{&graph};
-    auto minmax_bars = CalculateLeastMaxLoad(flow_network, left, right);
+    auto pred = [&graph, bars_sum](int minmax) {
+        FlowNetwork flow_network{graph};
+        flow_network.SetTargetEdgesCap(minmax);
+        return flow_network.GetMaxFlowVal() == bars_sum;
+    };
+    auto minmax_bars = CalculateLeastMaxLoad(left, right, pred);
 
     std::cout << minmax_bars << std::endl;
 }
