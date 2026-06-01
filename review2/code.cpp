@@ -92,16 +92,12 @@ public:
         return GetFlowVal();
     }
 
-    void SetTargetEdgesCap(int target_edges_cap) {
-        for (auto node_idx = 0; node_idx < size_; ++node_idx) {
-            capacities_[node_idx][kTargetIdx] = target_edges_cap;
-        }
-    }
-
 private:
     using EdgeFlow = int;
     using NodeHeight = int;
+
     friend class FlowNetworkBuilder;
+
     std::optional<int> GetVertexWithExcess() {
         for (int node_idx = 0; node_idx < size_; ++node_idx) {
             if (excesses_[node_idx] > 0) {
@@ -269,7 +265,6 @@ int main() {
     FlowNetworkBuilder builder{graph};
     auto pred = [&builder, bars_sum](int minmax) {
         auto flow_network = builder.Build(minmax);
-        flow_network.SetTargetEdgesCap(minmax);
         return flow_network.GetMaxFlowVal() == bars_sum;
     };
     auto minmax_bars = Utils::BinSearch(left, right, pred);
