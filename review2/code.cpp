@@ -34,16 +34,7 @@ public:
     Graph() = delete;
     Graph(int size) : size_{size} {}
 
-    void SetBarsCount(int node_idx, int bars_count) {
-        bars_count_[node_idx] = bars_count;
-        bars_sum_ += bars_count;
-    }
-
-    int GetBarsSum() const { return bars_sum_; }
-
     int GetSize() const { return size_; }
-
-    int GetNodeBars(int idx) { return bars_count_[idx]; }
 
     void SetTrustEdge(int tail, int head) { edges_[tail].push_back(head); }
 
@@ -51,9 +42,7 @@ public:
 
 private:
     std::array<std::vector<int>, kMaxNodesCount> edges_{};
-    std::array<int, kMaxNodesCount> bars_count_{};
     int size_{};
-    int bars_sum_ = 0;
 };
 
 class FlowNetwork {
@@ -234,7 +223,6 @@ std::tuple<Graph, int, int, FlowNetworkBuilder> ReadGraph() {
     for (auto man_idx : std::views::iota(0, vertex_count)) {
         std::cin >> bars;
         builder.AddNodeBars(bars, man_idx);
-        graph.SetBarsCount(man_idx, bars);
         bars_sum += bars;
         max_bars = std::max(max_bars, bars);
     }
