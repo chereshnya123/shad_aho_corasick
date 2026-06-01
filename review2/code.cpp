@@ -116,7 +116,7 @@ public:
 private:
     using EdgeFlow = int;
     using NodeHeight = int;
-
+    friend class FlowNetworkBuilder;
     void Init() {
         heights_.fill(0);
         heights_[kSourceIdx] = size_ + 2;
@@ -208,6 +208,40 @@ private:
     std::array<int, Graph::kMaxNodesCount + 2> excesses_{};
 };
 
+class FlowNetworkBuilder {
+public:
+    FlowNetworkBuilder(Graph& graph) : graph_{graph} {}
+    FlowNetwork Build(int target_edges_cap) {
+        FlowNetwork flow_network{graph_};
+        flow_network.heights_.fill(0);
+        flow_network.heights_[FlowNetwork::kSourceIdx] = graph_.GetSize() + 2;
+        for (auto& node_flow : flow_network.flow_) {
+            node_flow.fill(0);
+        }
+        for (int node_idx = 0; node_idx < flow_network.size_; ++node_idx) {
+            flow_network.flow_[FlowNetwork::kSourceIdx][node_idx] =
+                graph_.GetNodeBars(node_idx);
+            flow_network.flow_[node_idx][FlowNetwork::kSourceIdx] =
+                -graph_.GetNodeBars(node_idx);
+        }
+        for (auto node_idx = 0; node_idx < flow_network.size_; ++node_idx) {
+            flow_network.excesses_[node_idx] = graph_.GetNodeBars(node_idx);
+        }
+        flow_network.excesses_[FlowNetwork::kSourceIdx] = 0;
+        flow_network.excesses_[FlowNetwork::kTargetIdx] = 0;
+
+        for (auto node_idx = 0; node_idx < flow_network.size_; ++node_idx) {
+            flow_network.capacities_[node_idx][FlowNetwork::kTargetIdx] =
+                target_edges_cap;
+        }
+
+        return flow_network;
+    }
+
+private:
+    Graph& graph_;
+};
+
 std::tuple<Graph, int, int> ReadGraph() {
     int vertex_count;
     int edges_count;
@@ -250,9 +284,9 @@ int main() {
     auto max_bars = std::get<2>(read);
     int left = bars_sum / graph.GetSize();
     int right = max_bars;
-
-    auto pred = [&graph, bars_sum](int minmax) {
-        FlowNetwork flow_network{graph};
+    FlowNetworkBuilder builder{graph};
+    auto pred = [&builder, bars_sum](int minmax) {
+        auto flow_network = builder.Build(minmax);
         flow_network.SetTargetEdgesCap(minmax);
         return flow_network.GetMaxFlowVal() == bars_sum;
     };
