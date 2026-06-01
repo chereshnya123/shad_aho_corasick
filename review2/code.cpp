@@ -60,21 +60,7 @@ class FlowNetwork {
 public:
     static constexpr auto kSourceIdx = 100;
     static constexpr auto kTargetIdx = 101;
-
-    FlowNetwork(Graph& graph) : size_{graph.GetSize()}, graph_{graph} {
-        for (auto node = 0; node < size_; ++node) {
-            auto bars_count = graph.GetNodeBars(node);
-            capacities_[kSourceIdx][node] = bars_count;
-            auto neighbors = graph.GetNeighbors(node);
-            if (neighbors.empty()) {
-                continue;
-            }
-
-            for (auto neighbor : neighbors) {
-                capacities_[node][neighbor] = std::numeric_limits<int>::max();
-            }
-        }
-    }
+    FlowNetwork() = default;
 
     int GetFlowVal() {
         auto flow_val = 0;
@@ -86,7 +72,6 @@ public:
     }
 
     void BuildMaxFlow() {
-        Init();
         while (true) {
             auto node = GetVertexWithExcess();
             if (!node.has_value()) {
@@ -117,24 +102,6 @@ private:
     using EdgeFlow = int;
     using NodeHeight = int;
     friend class FlowNetworkBuilder;
-    void Init() {
-        heights_.fill(0);
-        heights_[kSourceIdx] = size_ + 2;
-        for (auto& node_flow : flow_) {
-            node_flow.fill(0);
-        }
-        for (int node_idx = 0; node_idx < size_; ++node_idx) {
-            flow_[kSourceIdx][node_idx] = graph_.GetNodeBars(node_idx);
-            flow_[node_idx][kSourceIdx] = -graph_.GetNodeBars(node_idx);
-        }
-
-        for (auto node_idx = 0; node_idx < size_; ++node_idx) {
-            excesses_[node_idx] = graph_.GetNodeBars(node_idx);
-        }
-        excesses_[kSourceIdx] = 0;
-        excesses_[kTargetIdx] = 0;
-    }
-
     std::optional<int> GetVertexWithExcess() {
         for (int node_idx = 0; node_idx < size_; ++node_idx) {
             if (excesses_[node_idx] > 0) {
@@ -197,7 +164,6 @@ private:
     }
 
     int size_;
-    Graph& graph_;
     std::array<std::array<EdgeFlow, Graph::kMaxNodesCount + 2>,
                Graph::kMaxNodesCount + 2>
         flow_{};  // Matrix
@@ -212,25 +178,41 @@ class FlowNetworkBuilder {
 public:
     FlowNetworkBuilder(Graph& graph) : graph_{graph} {}
     FlowNetwork Build(int target_edges_cap) {
-        FlowNetwork flow_network{graph_};
+        FlowNetwork flow_network;
+        flow_network.size_ = graph_.GetSize();
+        for (auto node = 0; node < graph_.GetSize(); ++node) {
+            auto bars_count = graph_.GetNodeBars(node);
+            flow_network.capacities_[FlowNetwork::kSourceIdx][node] =
+                bars_count;
+            auto neighbors = graph_.GetNeighbors(node);
+            if (neighbors.empty()) {
+                continue;
+            }
+
+            for (auto neighbor : neighbors) {
+                flow_network.capacities_[node][neighbor] =
+                    std::numeric_limits<int>::max();
+            }
+        }
+
         flow_network.heights_.fill(0);
         flow_network.heights_[FlowNetwork::kSourceIdx] = graph_.GetSize() + 2;
         for (auto& node_flow : flow_network.flow_) {
             node_flow.fill(0);
         }
-        for (int node_idx = 0; node_idx < flow_network.size_; ++node_idx) {
+        for (int node_idx = 0; node_idx < graph_.GetSize(); ++node_idx) {
             flow_network.flow_[FlowNetwork::kSourceIdx][node_idx] =
                 graph_.GetNodeBars(node_idx);
             flow_network.flow_[node_idx][FlowNetwork::kSourceIdx] =
                 -graph_.GetNodeBars(node_idx);
         }
-        for (auto node_idx = 0; node_idx < flow_network.size_; ++node_idx) {
+        for (auto node_idx = 0; node_idx < graph_.GetSize(); ++node_idx) {
             flow_network.excesses_[node_idx] = graph_.GetNodeBars(node_idx);
         }
         flow_network.excesses_[FlowNetwork::kSourceIdx] = 0;
         flow_network.excesses_[FlowNetwork::kTargetIdx] = 0;
 
-        for (auto node_idx = 0; node_idx < flow_network.size_; ++node_idx) {
+        for (auto node_idx = 0; node_idx < graph_.GetSize(); ++node_idx) {
             flow_network.capacities_[node_idx][FlowNetwork::kTargetIdx] =
                 target_edges_cap;
         }
