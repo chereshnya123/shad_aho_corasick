@@ -129,10 +129,11 @@ private:
 
     void Push(int from, int to) {
         auto residual_cap = capacities_[from][to] - flow_[from][to];
-        auto has_excess = excesses_[from] > 0;
-        auto has_residual_cap = residual_cap > 0;
-        auto is_height_correct = heights_[from] == heights_[to] + 1;
-        assert(has_excess && has_residual_cap && is_height_correct);
+        assert(excesses_[from] > 0 && "Can not push. Get node with no excess");
+        assert(residual_cap > 0 &&
+               "Can not push. Get node with no residual cap");
+        assert(heights_[from] == heights_[to] + 1 &&
+               "Can not push. Get two nodes with incorrect heights");
 
         auto push_volume = std::min(residual_cap, excesses_[from]);
         flow_[from][to] += push_volume;
@@ -177,15 +178,9 @@ public:
         FlowNetwork flow_network;
         flow_network.size_ = size_;
         for (auto node = 0; node < flow_network.size_; ++node) {
-            auto bars_count = bars_[node];
             flow_network.capacities_[FlowNetwork::kSourceIdx][node] =
-                bars_count;
-            auto neighbors = graph_->GetNeighbors(node);
-            if (neighbors.empty()) {
-                continue;
-            }
-
-            for (auto neighbor : neighbors) {
+                bars_[node];
+            for (auto neighbor : graph_->GetNeighbors(node)) {
                 flow_network.capacities_[node][neighbor] =
                     std::numeric_limits<int>::max();
             }
