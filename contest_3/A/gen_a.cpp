@@ -1,134 +1,72 @@
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
-constexpr auto kAlphabetSize = 256U;
-
-std::vector<int> GetInitialPermutation(const std::string& input_str) {
-    const auto kInputSize = input_str.size();
-    std::vector<int> char_counts(kAlphabetSize);
-
-    for (unsigned char ch : input_str) {
-        char_counts[ch]++;
-    }
-    for (auto i = 1U; i < kAlphabetSize; i++) {
-        char_counts[i] += char_counts[i - 1];
-    }
-
-    std::vector<int> initial_permutation(kInputSize);
-    for (auto i = 0U; i < kInputSize; i++) {
-        initial_permutation[--char_counts[static_cast<unsigned char>(
-            input_str[i])]] = i;
-    }
-    return initial_permutation;
-}
-
-std::vector<int> GetInitialClasses(
-    const std::string& input_str, const std::vector<int>& current_permutation) {
-    const auto kInputSize = input_str.size();
-    std::vector<int> class_ids(kInputSize);
-    class_ids[current_permutation[0]] = 0;
-
-    auto unique_class_count = 1;
-    for (auto i = 1U; i < kInputSize; i++) {
-        const auto kCurr = current_permutation[i];
-        const auto kPrev = current_permutation[i - 1];
-        if (input_str[kCurr] != input_str[kPrev]) {
-            unique_class_count++;
+void InplaceCountSort(
+    std::map<std::pair<int, int>, std::vector<long long int>>& labels,
+    std::vector<long long int>& suffix_labels) {
+    long long int new_label = 0;
+    for (auto& [_, suffixes] : labels) {
+        if (suffixes.empty()) {
+            continue;
         }
-        class_ids[kCurr] = unique_class_count - 1;
-    }
-    return class_ids;
-}
-
-std::vector<int> SortBySecondHalf(const std::vector<int>& current_permutation,
-                                  const std::vector<int>& class_ids,
-                                  std::size_t string_length,
-                                  std::size_t unique_class_count,
-                                  int shift_length) {
-    std::vector<int> shifted_permutation(string_length);
-    for (auto i = 0U; i < string_length; i++) {
-        auto shifted_pos = current_permutation[i] - shift_length;
-        if (shifted_pos < 0) {
-            shifted_pos += string_length;
+        for (auto suffix_pos : suffixes) {
+            suffix_labels[suffix_pos] = new_label;
         }
-        shifted_permutation[i] = shifted_pos;
+        ++new_label;
+        suffixes.clear();
     }
-
-    std::vector<int> class_counts(unique_class_count);
-    for (auto i = 0U; i < string_length; i++) {
-        class_counts[class_ids[shifted_permutation[i]]]++;
-    }
-    for (auto i = 1U; i < unique_class_count; i++) {
-        class_counts[i] += class_counts[i - 1];
-    }
-
-    std::vector<int> updated_permutation(string_length);
-    for (int i = string_length - 1; i >= 0; i--) {
-        const auto kPos = shifted_permutation[i];
-        updated_permutation[--class_counts[class_ids[kPos]]] = kPos;
-    }
-    return updated_permutation;
 }
 
-std::vector<int> UpdateClasses(const std::vector<int>& current_permutation,
-                               const std::vector<int>& class_ids,
-                               std::size_t string_length,
-                               std::size_t shift_length) {
-    std::vector<int> updated_classes(string_length);
-    updated_classes[current_permutation[0]] = 0;
+std::vector<long long int> GetInvertedSuffixArray(
+    const std::vector<long long int>& suf_array) {
+    std::vector<long long int> inverted(suf_array.size());
+    for (auto pos = 0U; pos < suf_array.size(); ++pos) {
+        auto rank = suf_array[pos];
+        inverted[rank] = pos;
+    }
 
-    auto unique_class_count = 1;
-    for (auto i = 1U; i < string_length; i++) {
-        const auto kCurrPos = current_permutation[i];
-        const auto kPrevPos = current_permutation[i - 1];
-        const auto kCurrHalf = (kCurrPos + shift_length) % string_length;
-        const auto kPrevHalf = (kPrevPos + shift_length) % string_length;
+    return inverted;
+}
 
-        const bool kFirstHalfEqual = class_ids[kCurrPos] == class_ids[kPrevPos];
-        const bool kSecondHalfEqual =
-            class_ids[kCurrHalf] == class_ids[kPrevHalf];
+// Not really suffix array, but sorted cyclic shifts
+std::vector<long long int> GetSuffixArray(const std::string& input_str) {
+    const long long int kInputSize = input_str.size();
+    std::vector<long long int> suffix_labels;
+    std::map<std::pair<int, int>, std::vector<long long int>> labels;
+    suffix_labels.reserve(kInputSize);
+    for (auto i = 0; i < kInputSize; ++i) {
+        suffix_labels.push_back(static_cast<int>(input_str[i] - 'a'));
+    }
 
-        if (!kFirstHalfEqual || !kSecondHalfEqual) {
-            unique_class_count++;
+    long long int suf_len = 1;
+    while (suf_len / 2 < kInputSize) {
+        auto prev_suffix_labels = suffix_labels;
+        suf_len = std::min(kInputSize, suf_len);
+        for (auto i = 0; i < kInputSize; ++i) {
+            auto label1 = prev_suffix_labels[i];
+            auto label2 = prev_suffix_labels[(i + suf_len) % kInputSize];
+            labels[{label1, label2}].push_back(i);
         }
-        updated_classes[kCurrPos] = unique_class_count - 1;
-    }
-    return updated_classes;
-}
 
-std::vector<int> SortCyclicShifts(const std::string& input_str) {
-    const auto kInputSize = input_str.size();
-    if (kInputSize == 0) {
-        return {};
+        InplaceCountSort(labels, suffix_labels);
+        suf_len *= 2;
     }
 
-    std::vector<int> current_permutation = GetInitialPermutation(input_str);
-    std::vector<int> class_ids =
-        GetInitialClasses(input_str, current_permutation);
-    int unique_class_count = class_ids[current_permutation[kInputSize - 1]] + 1;
-
-    for (auto i = 0U; (1 << i) < kInputSize; ++i) {
-        const auto kShiftSize = 1 << i;
-        current_permutation =
-            SortBySecondHalf(current_permutation, class_ids, kInputSize,
-                             unique_class_count, kShiftSize);
-        class_ids = UpdateClasses(current_permutation, class_ids, kInputSize,
-                                  kShiftSize);
-        unique_class_count = class_ids[current_permutation[kInputSize - 1]] + 1;
-    }
-    return current_permutation;
+    return GetInvertedSuffixArray(suffix_labels);
 }
 
 std::string GetBWT(const std::string& input_str) {
     const auto kInputSize = input_str.size();
-    std::vector<int> sorted_indices = SortCyclicShifts(input_str);
+    auto suff_array = GetSuffixArray(input_str);
 
     std::string bwt;
     bwt.reserve(kInputSize);
     for (auto i = 0U; i < kInputSize; i++) {
-        const auto kPrevPos = (sorted_indices[i] - 1 + kInputSize) % kInputSize;
-        bwt.push_back(input_str[kPrevPos]);
+        const long long int kLastCharPos =
+            (suff_array[i] + input_str.size() - 1) % input_str.size();
+        bwt.push_back(input_str[kLastCharPos]);
     }
     return bwt;
 }
