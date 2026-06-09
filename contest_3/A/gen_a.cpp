@@ -39,10 +39,9 @@ public:
         }
     }
 
-    void SquashLabels(std::vector<std::pair<int, int>>& doubled_sa,
-                      std::vector<int>& inv_suffix_array) {
+    void SquashLabels(std::vector<std::pair<int, int>>& doubled_sa) {
         const auto kLabelsCount =
-            std::max(27, static_cast<int>(inv_suffix_array.size()));
+            std::max(27, static_cast<int>(inv_suffix_array_.size()));
         std::unordered_map<int, std::vector<int>> pos_by_label{};
         // Sort by second label
         for (auto pos = 0U; pos < doubled_sa.size(); ++pos) {
@@ -60,14 +59,14 @@ public:
         BuildSuffixArray(pos_by_label, kLabelsCount);
 
         auto new_rank = 0;
-        inv_suffix_array[suffix_array_[0]] = new_rank;
+        inv_suffix_array_[suffix_array_[0]] = new_rank;
         for (auto i = 1U; i < suffix_array_.size(); ++i) {
             auto prev_pos = suffix_array_[i - 1];
             auto cur_pos = suffix_array_[i];
             if (doubled_sa[prev_pos] != doubled_sa[cur_pos]) {
                 ++new_rank;
             }
-            inv_suffix_array[cur_pos] = new_rank;
+            inv_suffix_array_[cur_pos] = new_rank;
         }
     }
 
@@ -99,7 +98,7 @@ public:
     }
 
     // Not really suffix array, but sorted cyclic shifts
-    std::vector<int> GetSuffixArray(const std::string& input_str) {
+    const std::vector<int>& GetSuffixArray(const std::string& input_str) {
         InitInvSA(input_str);
 
         const int kInputSize = input_str.size();
@@ -107,26 +106,26 @@ public:
         doubled_sa.resize(kInputSize);
         int suf_len = 1;
         while (suf_len / 2 < kInputSize) {
-            auto prev_suffix_labels = inv_suffix_array_;
             suf_len = std::min(kInputSize, suf_len);
             for (auto i = 0; i < kInputSize; ++i) {
-                auto label1 = prev_suffix_labels[i];
-                auto label2 = prev_suffix_labels[(i + suf_len) % kInputSize];
+                auto label1 = inv_suffix_array_[i];
+                auto label2 = inv_suffix_array_[(i + suf_len) % kInputSize];
                 doubled_sa[i] = {label1, label2};
             }
 
             // PrintDoubledSa(doubled_sa);
-            SquashLabels(doubled_sa, inv_suffix_array_);
+            // Sets inverted suffix array
+            SquashLabels(doubled_sa);
             // PrintInvSa(inv_suffix_array_);
             suf_len *= 2;
         }
 
-        return GetSaFromInvSa();
+        return suffix_array_;
     }
 
     std::string GetBWT(const std::string& input_str) {
         const auto kInputSize = input_str.size();
-        auto suff_array = GetSuffixArray(input_str);
+        const auto& suff_array = GetSuffixArray(input_str);
 
         std::string bwt;
         bwt.reserve(kInputSize);
