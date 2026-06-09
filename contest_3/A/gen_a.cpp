@@ -2,62 +2,24 @@
 #include <iostream>
 #include <ranges>
 #include <string>
-#include <unordered_map>
 #include <vector>
-// #include <format>
-
-// void PrintDoubledSa(const std::vector<std::pair<int, int>>& doubled_sa) {
-//     for (const auto& labels: doubled_sa) {
-//         std::cout << std::format("({}, {}) ", labels.first, labels.second);
-//     }
-//     std::cout << std::endl;
-// }
-
-// void PrintInvSa(const std::vector<int>& sa) {
-//     for (auto label: sa) {
-//         std::cout << label << ' ';
-//     }
-//     std::cout << std::endl;
-// }
 
 class BWTBuilder {
 public:
     BWTBuilder(size_t size) { suffix_array_.resize(size); }
 
-    void BuildSuffixArray(
-        const std::unordered_map<int, std::vector<int>>& pos_by_label,
-        const int kLabelsCount) {
+    void BuildSuffixArray(std::vector<std::vector<int>>& pos_by_label,
+                          const int kLabelsCount) {
         auto write_idx = 0U;
         for (auto label : std::views::iota(0, kLabelsCount)) {
-            if (!pos_by_label.contains(label)) {
-                continue;
-            }
-
-            for (auto pos : pos_by_label.at(label)) {
+            for (auto pos : pos_by_label[label]) {
                 suffix_array_[write_idx++] = pos;
             }
+            pos_by_label[label].clear();
         }
     }
 
-    void SquashLabels(std::vector<std::pair<int, int>>& doubled_sa) {
-        const auto kLabelsCount =
-            std::max(27, static_cast<int>(inv_suffix_array_.size()));
-        std::unordered_map<int, std::vector<int>> pos_by_label{};
-        // Sort by second label
-        for (auto pos = 0U; pos < doubled_sa.size(); ++pos) {
-            auto label = doubled_sa[pos].second;
-            pos_by_label[label].push_back(pos);
-        }
-        BuildSuffixArray(pos_by_label, kLabelsCount);
-
-        // Sort by first label
-        pos_by_label.clear();
-        for (auto pos : suffix_array_) {
-            auto label = doubled_sa[pos].first;
-            pos_by_label[label].push_back(pos);
-        }
-        BuildSuffixArray(pos_by_label, kLabelsCount);
-
+    void BuildInvSa(const std::vector<std::pair<int, int>>& doubled_sa) {
         auto new_rank = 0;
         inv_suffix_array_[suffix_array_[0]] = new_rank;
         for (auto i = 1U; i < suffix_array_.size(); ++i) {
@@ -68,6 +30,26 @@ public:
             }
             inv_suffix_array_[cur_pos] = new_rank;
         }
+    }
+
+    void SquashLabels(std::vector<std::pair<int, int>>& doubled_sa) {
+        const auto kLabelsCount =
+            std::max(27, static_cast<int>(inv_suffix_array_.size()));
+        std::vector<std::vector<int>> pos_by_label{};
+        pos_by_label.resize(kLabelsCount);
+        // Sort by second label
+        for (auto pos = 0U; pos < doubled_sa.size(); ++pos) {
+            auto label = doubled_sa[pos].second;
+            pos_by_label[label].push_back(pos);
+        }
+        BuildSuffixArray(pos_by_label, kLabelsCount);
+
+        // Sort by first label
+        for (auto pos : suffix_array_) {
+            auto label = doubled_sa[pos].first;
+            pos_by_label[label].push_back(pos);
+        }
+        BuildSuffixArray(pos_by_label, kLabelsCount);
     }
 
     std::vector<int> GetSaFromInvSa() {
@@ -106,6 +88,9 @@ public:
         doubled_sa.resize(kInputSize);
         int suf_len = 1;
         while (suf_len / 2 < kInputSize) {
+            if (suf_len != 1) {
+                BuildInvSa(doubled_sa);
+            }
             suf_len = std::min(kInputSize, suf_len);
             for (auto i = 0; i < kInputSize; ++i) {
                 auto label1 = inv_suffix_array_[i];
@@ -113,10 +98,8 @@ public:
                 doubled_sa[i] = {label1, label2};
             }
 
-            // PrintDoubledSa(doubled_sa);
             // Sets inverted suffix array
             SquashLabels(doubled_sa);
-            // PrintInvSa(inv_suffix_array_);
             suf_len *= 2;
         }
 
