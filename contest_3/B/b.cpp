@@ -20,7 +20,6 @@ public:
             for (auto pos : pos_by_label[label]) {
                 suffix_array_[write_idx++] = pos;
             }
-            pos_by_label[label].clear();
         }
     }
 
@@ -39,19 +38,24 @@ public:
 
     void SquashLabels() {
         const auto kLabelsCount =
-            std::max(kAlphabetSize, inv_suffix_array_.size());
+            std::max(kAlphabetSize, inv_suffix_array_.size()) + 1;
         std::vector<std::vector<int>> pos_by_label{};
         pos_by_label.resize(kLabelsCount);
+
         // Sort by second label
         for (auto pos = 0U; pos < doubled_sa_.size(); ++pos) {
-            auto label = doubled_sa_[pos].second;
+            auto label = doubled_sa_[pos].second + 1;
             pos_by_label[label].push_back(pos);
         }
+
         BuildSuffixArray(pos_by_label, kLabelsCount);
 
+        for (auto& poses : pos_by_label) {
+            poses.clear();
+        }
         // Sort by first label
         for (auto pos : suffix_array_) {
-            auto label = doubled_sa_[pos].first;
+            auto label = doubled_sa_[pos].first + 1;
             pos_by_label[label].push_back(pos);
         }
         BuildSuffixArray(pos_by_label, kLabelsCount);
@@ -81,8 +85,7 @@ public:
         const auto kInputSize = input_str.size();
         inv_suffix_array_.reserve(kInputSize);
         for (auto i = 0U; i < kInputSize; ++i) {
-            inv_suffix_array_.push_back(static_cast<int>(input_str[i] -
-            'a'));
+            inv_suffix_array_.push_back(static_cast<int>(input_str[i] - 'a'));
         }
     }
 
@@ -95,17 +98,16 @@ public:
         suffix_array_.resize(kInputSize);
         InitInvSA(input_str);
         doubled_sa_.resize(kInputSize);
-        auto suf_len = 1;
-        while (suf_len / 2 < kInputSize) {
-            if (suf_len != 1) {
+        auto ready_suf_len = 1;
+        while (ready_suf_len < kInputSize) {
+            if (ready_suf_len != 1) {
                 BuildInvSa();
             }
-            suf_len = std::min(kInputSize, suf_len);
             for (auto i = 0; i < kInputSize; ++i) {
                 auto label1 = inv_suffix_array_[i];
-                auto label2 = 0;
-                if (i + suf_len < kInputSize) {
-                    label2 = inv_suffix_array_[i + suf_len];
+                auto label2 = -1;
+                if (i + ready_suf_len < kInputSize) {
+                    label2 = inv_suffix_array_[i + ready_suf_len];
                 }
                 doubled_sa_[i] = {label1, label2};
             }
@@ -113,7 +115,7 @@ public:
             // Sets inverted suffix array
             SquashLabels();
             BuildInvSa();
-            suf_len *= 2;
+            ready_suf_len *= 2;
         }
 
         return suffix_array_;
@@ -148,18 +150,21 @@ std::vector<int> BuildLcpArray(const std::vector<int>& suffix_array,
     auto common = 0U;
     std::vector<int> lcp(suffix_array.size() - 1);
     for (auto pos = 0U; pos < kInputSize; ++pos) {
-        if (inv_suffix_array[pos] == static_cast<int>(kInputSize - 1)) {
+        const auto kRank = inv_suffix_array[pos];
+        if (kRank == static_cast<int>(kInputSize - 1)) {
+            common = 0;
             continue;
         }
-        auto next_pos = suffix_array[inv_suffix_array[pos] + 1];
+
+        const auto kNextPos = suffix_array[kRank + 1];
         while (pos + common < kInputSize &&       //
-               next_pos + common < kInputSize &&  //
-               input_str[pos + common] == input_str[next_pos + common]) {
+               kNextPos + common < kInputSize &&  //
+               input_str[pos + common] == input_str[kNextPos + common]) {
             ++common;
         }
         // std::cout << "pos = " << pos << " next pos = " << next_pos << "
         // common = " << common << std::endl;
-        lcp[inv_suffix_array[pos]] = common;
+        lcp[kRank] = common;
         if (common > 0) {
             --common;
         }
@@ -172,6 +177,7 @@ std::vector<int> BuildLcpArray(const std::vector<int>& suffix_array,
 // 2^x + 1 --> x
 // 2^x - 1 --> x - 1
 inline std::size_t Floor2Log(std::size_t value) {
+    assert(value != 0);
     return sizeof(value) * CHAR_BIT - std::__countl_zero(value) - 1;
 }
 
@@ -180,11 +186,13 @@ public:
     SparseTable(const std::vector<int>& values)
         : size_{values.size()}, origin_{values} {
         const int kInputSize = values.size();
+        if (kInputSize == 0) {
+            return;
+        }
         const auto kMaxL = Floor2Log(kInputSize) + 1;
         table_.assign(kInputSize, std::vector<int>(kMaxL));
         for (auto i = 0; i < kInputSize; ++i) {
-            table_[i][0] =
-                std::min(values[i], values[std::min(i + 1, kInputSize - 1)]);
+            table_[i][0] = values[i];
         }
 
         for (auto i = kInputSize - 1; i >= 0; --i) {
@@ -198,17 +206,19 @@ public:
     }
 
     int Rmq(std::size_t left_old, std::size_t right_old) const {
+        assert(size_ != 0);
         auto right = std::min(right_old, size_ - 1);
         auto left = std::min(left_old, size_ - 1);
         if (left == right) {
             return origin_[left];
         }
 
-        const auto kRangeLen = right - left;
+        const auto kRangeLen = right - left + 1;
         const auto kEtalonLenLog = Floor2Log(kRangeLen);
 
-        return std::min(table_[left][kEtalonLenLog],
-                        table_[right - (1 << kEtalonLenLog)][kEtalonLenLog]);
+        return std::min(
+            table_[left][kEtalonLenLog],
+            table_[right - (1 << kEtalonLenLog) + 1][kEtalonLenLog]);
     }
 
 private:
@@ -255,13 +265,12 @@ std::vector<int> ReadArray() {
     for (auto left = 0U; left < kData.size(); ++left) {
         for (auto right = left; right < kData.size(); ++right) {
             const auto kExpected = *std::min_element(kData.begin() + left,
-                                                     kData.begin() + right +
-                                                     1);
+                                                     kData.begin() + right + 1);
             const auto kActual = sparse_table.Rmq(left, right);
             if (kExpected != kActual) {
                 std::cout << std::format(
-                    "Min [{}, {}]: expected = {}, actual = {}\n", left,
-                    right, kExpected, kActual);
+                    "Min [{}, {}]: expected = {}, actual = {}\n", left, right,
+                    kExpected, kActual);
                 assert(kExpected == kActual);
             }
         }
@@ -294,24 +303,14 @@ int main() {
         auto it = active_ranks.lower_bound(current_rank);
 
         if (it != active_ranks.end()) {
-            const auto kRank = *it;
-            const auto kLeft = std::min(current_rank, kRank);
-            const auto kRight = std::max(current_rank, kRank);
-            if (kLeft < kRight) {
-                best_lcp =
-                    std::max(best_lcp, kSparseTable.Rmq(kLeft, kRight - 1));
-            }
+            best_lcp =
+                std::max(best_lcp, kSparseTable.Rmq(current_rank, *it - 1));
         }
 
         if (it != active_ranks.begin()) {
             --it;
-            const auto kRank = *it;
-            const auto kLeft = std::min(current_rank, kRank);
-            const auto kRight = std::max(current_rank, kRank);
-            if (kLeft < kRight) {
-                best_lcp =
-                    std::max(best_lcp, kSparseTable.Rmq(kLeft, kRight - 1));
-            }
+            best_lcp =
+                std::max(best_lcp, kSparseTable.Rmq(*it, current_rank - 1));
         }
 
         std::cout << best_lcp << '\n';

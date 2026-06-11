@@ -42,9 +42,7 @@ public:
 
     void SquashLabels() {
         const auto kLabelsCount =
-            static_cast<int>(
-                std::max(kAlphabetSize, inv_suffix_array_.size())) +
-            2;
+            std::max(kAlphabetSize, inv_suffix_array_.size()) + 2;
 
         std::vector<std::vector<int>> pos_by_label{};
         pos_by_label.resize(kLabelsCount);
@@ -56,12 +54,11 @@ public:
         }
         BuildSuffixArray(pos_by_label, kLabelsCount);
 
-        std::vector<int> temp_sa = suffix_array_;
         for (auto& labels : pos_by_label) {
             labels.clear();
         }
 
-        for (auto pos : temp_sa) {
+        for (auto pos : suffix_array_) {
             auto label = doubled_sa_[pos].first + 1;
             pos_by_label[label].push_back(pos);
         }
@@ -78,9 +75,7 @@ public:
         poses_by_rank.resize(kClassesCount);
         for (auto pos = 0U; pos < inv_suffix_array_.size(); ++pos) {
             auto rank = inv_suffix_array_[pos];
-            if (rank < static_cast<int>(kClassesCount)) {
-                poses_by_rank[rank].push_back(pos);
-            }
+            poses_by_rank[rank].push_back(pos);
         }
 
         std::vector<int> suffix_array;
@@ -328,24 +323,14 @@ int main() {
         auto it = active_ranks.lower_bound(current_rank);
 
         if (it != active_ranks.end()) {
-            const auto kRank = *it;
-            const auto kLeft = std::min(current_rank, kRank);
-            const auto kRight = std::max(current_rank, kRank);
-            if (kLeft < kRight) {
-                best_lcp =
-                    std::max(best_lcp, kSparseTable.Rmq(kLeft, kRight - 1));
-            }
+            best_lcp =
+                std::max(best_lcp, kSparseTable.Rmq(current_rank, *it - 1));
         }
 
         if (it != active_ranks.begin()) {
             --it;
-            const auto kRank = *it;
-            const auto kLeft = std::min(current_rank, kRank);
-            const auto kRight = std::max(current_rank, kRank);
-            if (kLeft < kRight) {
-                best_lcp =
-                    std::max(best_lcp, kSparseTable.Rmq(kLeft, kRight - 1));
-            }
+            best_lcp =
+                std::max(best_lcp, kSparseTable.Rmq(*it, current_rank - 1));
         }
 
         std::cout << best_lcp << '\n';
