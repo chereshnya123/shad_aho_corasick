@@ -3,8 +3,8 @@
 #include <cassert>
 #include <climits>
 #include <cstddef>
+#include <deque>
 #include <iostream>
-#include <queue>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -23,8 +23,8 @@ public:
         }
     }
 
-    void BuildInvSa() {
-        auto new_rank = 0;
+    int BuildInvSa() {
+        auto new_rank = 1;
         inv_suffix_array_[suffix_array_[0]] = new_rank;
         for (auto i = 1U; i < suffix_array_.size(); ++i) {
             auto prev_pos = suffix_array_[i - 1];
@@ -34,36 +34,50 @@ public:
             }
             inv_suffix_array_[cur_pos] = new_rank;
         }
+
+        return new_rank;
     }
 
-    void SquashLabels() {
-        const auto kLabelsCount =
-            std::max(kAlphabetSize, inv_suffix_array_.size()) + 1;
-        std::vector<std::vector<int>> pos_by_label{};
-        pos_by_label.resize(kLabelsCount);
+    void SquashLabels(int labels_count) {
+        std::fill(label_counts_.begin(), label_counts_.begin() + labels_count,
+                  0);
 
-        // Sort by second label
+        for (auto [_, second_label] : doubled_sa_) {
+            ++label_counts_[second_label];
+        }
+
+        pos_to_insert_[0] = 0;
+        for (auto label = 1; label < labels_count; ++label) {
+            auto count = label_counts_[label - 1];
+            pos_to_insert_[label] = pos_to_insert_[label - 1] + count;
+        }
+
         for (auto pos = 0U; pos < doubled_sa_.size(); ++pos) {
-            auto label = doubled_sa_[pos].second + 1;
-            pos_by_label[label].push_back(pos);
+            auto label = doubled_sa_[pos];
+            temp_suffix_array_[pos_to_insert_[label.second]++] = pos;
         }
 
-        BuildSuffixArray(pos_by_label, kLabelsCount);
+        std::fill(label_counts_.begin(), label_counts_.begin() + labels_count,
+                  0);
 
-        for (auto& poses : pos_by_label) {
-            poses.clear();
+        for (auto [first_label, _] : doubled_sa_) {
+            ++label_counts_[first_label];
         }
-        // Sort by first label
-        for (auto pos : suffix_array_) {
-            auto label = doubled_sa_[pos].first + 1;
-            pos_by_label[label].push_back(pos);
+        pos_to_insert_[0] = 0;
+        for (auto label = 1; label < labels_count; ++label) {
+            auto count = label_counts_[label - 1];
+            pos_to_insert_[label] = pos_to_insert_[label - 1] + count;
         }
-        BuildSuffixArray(pos_by_label, kLabelsCount);
+
+        for (auto pos : temp_suffix_array_) {
+            auto pos_label = doubled_sa_[pos].first;
+            suffix_array_[pos_to_insert_[pos_label]++] = pos;
+        }
     }
 
     std::vector<int> GetSaFromInvSa() {
         const auto kClassesCount =
-            std::max(kAlphabetSize, inv_suffix_array_.size());
+            std::max(kAlphabetSize, inv_suffix_array_.size()) + 1;
         std::vector<std::vector<int>> poses_by_rank;
         poses_by_rank.resize(kClassesCount);
         for (auto pos = 0U; pos < inv_suffix_array_.size(); ++pos) {
@@ -85,7 +99,14 @@ public:
         const auto kInputSize = input_str.size();
         inv_suffix_array_.reserve(kInputSize);
         for (auto i = 0U; i < kInputSize; ++i) {
-            inv_suffix_array_.push_back(static_cast<int>(input_str[i] - 'a'));
+            inv_suffix_array_.push_back(static_cast<int>(input_str[i] - 'a') +
+                                        1);
+        }
+    }
+
+    void DecrInvSa() {
+        for (auto& rank : inv_suffix_array_) {
+            --rank;
         }
     }
 
@@ -97,15 +118,18 @@ public:
         }
         suffix_array_.resize(kInputSize);
         InitInvSA(input_str);
+        const auto kLabelsCount =
+            std::max(kAlphabetSize, inv_suffix_array_.size()) + 1;
+        temp_suffix_array_.resize(suffix_array_.size());
+        label_counts_.resize(kLabelsCount);
+        pos_to_insert_.resize(kLabelsCount);
         doubled_sa_.resize(kInputSize);
         auto ready_suf_len = 1;
+        int classes_count = kAlphabetSize;
         while (ready_suf_len < kInputSize) {
-            if (ready_suf_len != 1) {
-                BuildInvSa();
-            }
             for (auto i = 0; i < kInputSize; ++i) {
                 auto label1 = inv_suffix_array_[i];
-                auto label2 = -1;
+                auto label2 = 0;
                 if (i + ready_suf_len < kInputSize) {
                     label2 = inv_suffix_array_[i + ready_suf_len];
                 }
@@ -113,11 +137,14 @@ public:
             }
 
             // Sets inverted suffix array
-            SquashLabels();
-            BuildInvSa();
+            SquashLabels(classes_count + 1);
+            classes_count = BuildInvSa();
+            if (classes_count >= kInputSize) {
+                break;
+            }
             ready_suf_len *= 2;
         }
-
+        DecrInvSa();
         return suffix_array_;
     }
 
@@ -127,6 +154,9 @@ private:
     std::vector<int> suffix_array_;
     std::vector<int> inv_suffix_array_;
     std::vector<std::pair<int, int>> doubled_sa_;
+    std::vector<int> temp_suffix_array_;
+    std::vector<int> label_counts_;
+    std::vector<int> pos_to_insert_;
 };
 
 void ReturnAnswer(std::ostream& out, const std::string& ans) {
@@ -292,23 +322,34 @@ std::vector<int> ReadArray() {
 }
 #endif
 
-int GetStringNumByPos(int pos, const std::vector<int>& strings_starts) {
-    for (int i = strings_starts.size() - 1; i >= 0; ++i) {
-        if (pos >= strings_starts[i]) {
-            return i;
+bool IsAll(const std::vector<int>& ids_counts) {
+    return std::ranges::all_of(ids_counts,
+                               [](int count) { return count != 0; });
+}
+
+class WindowMin {
+public:
+    WindowMin(const std::vector<int>& origin) : origin_{origin} {}
+    void Push(int idx) {
+        while (!window_min_.empty() &&
+               origin_[idx] < origin_[window_min_.back()]) {
+            window_min_.pop_back();
+        }
+        window_min_.push_back(idx);
+    }
+
+    void Pop(int idx) {
+        assert(window_min_.front() >= idx);
+        if (window_min_.front() == idx) {
+            window_min_.pop_front();
         }
     }
 
-    throw std::runtime_error{"Can not find string num by pos"};
-}
+    int GetMin() { return origin_[window_min_.front()]; }
 
-bool IsAll(const std::vector<int>& ids_counts) {
-    return std::ranges::all_of(ids_counts, [](int count) { return count > 0; });
-}
-
-struct LongestSubstrInfo {
-    std::size_t len;
-    std::size_t pos;
+private:
+    const std::vector<int>& origin_;
+    std::deque<int> window_min_;
 };
 
 int main() {
@@ -317,24 +358,18 @@ int main() {
     TestFloor2Log();
 #endif
 #ifndef TEST
-    // OK
     auto [strings_count, ids, input] = ReadInputString();
 
     if (strings_count == 1) {
         std::cout << input << std::endl;
         return 0;
     }
-
     std::string_view max_substring;
     SuffixArrayBuilder builder;
-    // OK
     auto suffix_array = builder.GetSuffixArray(input);
-    // OK
     const auto& inv_suffix_array = builder.GetInvSuffixArray();
-    // OK
     const auto kLcp = BuildLcpArray(suffix_array, inv_suffix_array, input);
-    // OK
-    const SparseTable kSparseTable{kLcp};
+    WindowMin window{kLcp};
     std::vector<int> str_counts(strings_count);
     auto left = 1U;
     auto right = 1U;
@@ -347,14 +382,21 @@ int main() {
             continue;
         }
         str_counts[kNewId]++;
+        if (left < right) {
+            window.Push(right - 1);
+        }
         if (IsAll(str_counts)) {
+            auto min = window.GetMin();
             while (IsAll(str_counts)) {
-                const auto kIdToRemove = ids[suffix_array[left++]];
+                min = window.GetMin();
+                const auto kIdToRemove = ids[suffix_array[left]];
                 assert(kIdToRemove != -1);
                 str_counts[kIdToRemove]--;
+                window.Pop(left);
+                ++left;
             }
             const auto kStartPos = suffix_array[left - 1];
-            std::size_t substr_size = kSparseTable.Rmq(left - 1, right - 1);
+            std::size_t substr_size = min;
             const auto kSubstr =
                 std::string_view(input.data() + kStartPos, substr_size);
             if (max_substring.size() < substr_size) {
